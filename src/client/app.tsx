@@ -6,6 +6,7 @@ import { LANGUAGE_OPTIONS, MESSAGES_BY_LANGUAGE, type LanguageCode, type Message
 import { getActionsForState } from './utils/incidentActions'
 import { formatDate, formatDuration, formatNextTime } from './utils/formatters'
 import { buildCompletionMotivation } from './utils/motivation'
+import { STORAGE_KEYS, readJson, writeJson } from './utils/storage'
 import {
     IncidentRecord,
     IncidentService,
@@ -16,9 +17,6 @@ import {
 } from './services/IncidentService'
 
 const DEFAULT_ESTIMATE_MINUTES = 15
-const INCIDENT_CACHE_KEY = 'incident-workflow-cache-v1'
-const PENDING_MUTATIONS_KEY = 'incident-workflow-pending-v1'
-const REPORTED_INCIDENT_IDS_KEY = 'incident-workflow-reported-v1'
 
 const FALLBACK_RESOLUTION_CODES: ChoiceOption[] = [
     { value: 'Duplicate', label: 'Duplicate' },
@@ -44,26 +42,6 @@ type PendingMutation =
     | { id: string; type: 'setState'; incidentId: string; state: IncidentStateValue; extraFields?: Record<string, string> }
     | { id: string; type: 'addWorkNote'; incidentId: string; note: string }
     | { id: string; type: 'createIncident'; payload: ReportIssuePayload }
-
-function readJson<T>(key: string, fallback: T): T {
-    try {
-        const raw = window.localStorage.getItem(key)
-        if (!raw) {
-            return fallback
-        }
-        return JSON.parse(raw) as T
-    } catch {
-        return fallback
-    }
-}
-
-function writeJson<T>(key: string, value: T) {
-    try {
-        window.localStorage.setItem(key, JSON.stringify(value))
-    } catch {
-        // noop
-    }
-}
 
 function isNetworkError(error: unknown) {
     if (!(error instanceof Error)) {
@@ -158,13 +136,13 @@ export default function App() {
     const [pendingSyncCount, setPendingSyncCount] = useState(0)
     const [hasLoadedFromServer, setHasLoadedFromServer] = useState(false)
     const [reportedIncidentIds, setReportedIncidentIds] = useState<string[]>(() =>
-        readJson<string[]>(REPORTED_INCIDENT_IDS_KEY, [])
+        readJson<string[]>(STORAGE_KEYS.reportedIncidentIds, [])
     )
     const shouldAutoRefresh = !updatingId && !activeResolveId && !activeCommentId && !showReportForm
 
-    const getPendingMutations = useCallback(() => readJson<PendingMutation[]>(PENDING_MUTATIONS_KEY, []), [])
+    const getPendingMutations = useCallback(() => readJson<PendingMutation[]>(STORAGE_KEYS.pendingMutations, []), [])
     const setPendingMutations = useCallback((next: PendingMutation[]) => {
-        writeJson(PENDING_MUTATIONS_KEY, next)
+        writeJson(STORAGE_KEYS.pendingMutations, next)
         setPendingSyncCount(next.length)
     }, [])
     const markReportedIncident = useCallback((incidentId: string) => {
@@ -178,7 +156,7 @@ export default function App() {
                 return previous
             }
             const next = [id, ...previous].slice(0, 200)
-            writeJson(REPORTED_INCIDENT_IDS_KEY, next)
+            writeJson(STORAGE_KEYS.reportedIncidentIds, next)
             return next
         })
     }, [])
@@ -218,7 +196,7 @@ export default function App() {
         }
         try {
             const data = await incidentService.listAssignedToMe()
-            writeJson(INCIDENT_CACHE_KEY, data)
+            writeJson(STORAGE_KEYS.incidentCache, data)
             setHasLoadedFromServer(true)
             const nextIds = new Set(data.map((incident) => value(incident.sys_id)).filter(Boolean))
             const previousIds = seenIncidentIdsRef.current
@@ -249,7 +227,7 @@ export default function App() {
         } catch (caughtError) {
             console.error(caughtError)
             if (!isOnline) {
-                const cached = readJson<IncidentRecord[]>(INCIDENT_CACHE_KEY, [])
+                const cached = readJson<IncidentRecord[]>(STORAGE_KEYS.incidentCache, [])
                 if (cached.length > 0) {
                     setIncidents(cached)
                 }

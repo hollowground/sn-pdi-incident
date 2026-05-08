@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { LANGUAGE_OPTIONS, MESSAGES_BY_LANGUAGE, type LanguageCode } from '../i18n/messages'
-
-const LANGUAGE_STORAGE_KEY = 'incident-workflow-language-v1'
+import { STORAGE_KEYS } from '../utils/storage'
 
 function resolveInitialLanguage(): LanguageCode {
     try {
-        const saved = window.localStorage.getItem(LANGUAGE_STORAGE_KEY)
+        const saved = window.localStorage.getItem(STORAGE_KEYS.language)
         if (saved === 'en' || saved === 'es' || saved === 'fr') {
             return saved
         }
@@ -37,7 +36,7 @@ export function useLanguage() {
 
     useEffect(() => {
         try {
-            window.localStorage.setItem(LANGUAGE_STORAGE_KEY, language)
+            window.localStorage.setItem(STORAGE_KEYS.language, language)
         } catch {
             // noop
         }
