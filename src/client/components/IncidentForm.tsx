@@ -20,9 +20,61 @@ type IncidentFormProps = {
     incident?: IncidentLike
     onSubmit: (data: IncidentFormData) => void
     onCancel: () => void
+    messages?: IncidentFormMessages
 }
 
-export default function IncidentForm({ incident, onSubmit, onCancel }: IncidentFormProps) {
+export type IncidentFormMessages = {
+    incidentFallbackLabel: string
+    headingEditPrefix: string
+    headingReportNew: string
+    shortDescriptionLabel: string
+    descriptionLabel: string
+    impactLabel: string
+    urgencyLabel: string
+    impactHigh: string
+    impactMedium: string
+    impactLow: string
+    cancelButton: string
+    updateButton: string
+    submitIncidentButton: string
+    scanQrButton: string
+    scanStatusSuccess: string
+    scanErrorSecureContext: string
+    scanErrorNoCameraSupport: string
+    scanErrorStart: string
+    scannerDialogAria: string
+    scannerTitle: string
+    scannerHint: string
+    closeButton: string
+}
+
+const DEFAULT_FORM_MESSAGES: IncidentFormMessages = {
+    incidentFallbackLabel: 'Incident',
+    headingEditPrefix: 'Edit',
+    headingReportNew: 'Report New Incident',
+    shortDescriptionLabel: 'Short Description *',
+    descriptionLabel: 'Description',
+    impactLabel: 'Impact',
+    urgencyLabel: 'Urgency',
+    impactHigh: 'High',
+    impactMedium: 'Medium',
+    impactLow: 'Low',
+    cancelButton: 'Cancel',
+    updateButton: 'Update',
+    submitIncidentButton: 'Submit Incident',
+    scanQrButton: 'Scan QR',
+    scanStatusSuccess: 'QR code scanned. Fields updated.',
+    scanErrorSecureContext: 'Camera access requires HTTPS or localhost.',
+    scanErrorNoCameraSupport: 'This browser does not support camera capture.',
+    scanErrorStart: 'Unable to start scanner. Check camera permissions and try again.',
+    scannerDialogAria: 'Scan QR code',
+    scannerTitle: 'Scan QR Code',
+    scannerHint: 'Point your camera at a QR code to auto-fill the form.',
+    closeButton: 'Close',
+}
+
+export default function IncidentForm({ incident, onSubmit, onCancel, messages }: IncidentFormProps) {
+    const m = messages || DEFAULT_FORM_MESSAGES
     const isEditing = Boolean(incident)
     const [formData, setFormData] = useState<IncidentFormData>({
         short_description: '',
@@ -116,8 +168,8 @@ export default function IncidentForm({ incident, onSubmit, onCancel }: IncidentF
             ...previous,
             ...nextPatch,
         }))
-        setScanStatus('QR code scanned. Fields updated.')
-    }, [])
+        setScanStatus(m.scanStatusSuccess)
+    }, [m.scanStatusSuccess])
 
     useEffect(() => {
         let cancelled = false
@@ -127,11 +179,11 @@ export default function IncidentForm({ incident, onSubmit, onCancel }: IncidentF
                 return
             }
             if (!window.isSecureContext) {
-                setScannerError('Camera access requires HTTPS or localhost.')
+                setScannerError(m.scanErrorSecureContext)
                 return
             }
             if (!navigator.mediaDevices?.getUserMedia) {
-                setScannerError('This browser does not support camera capture.')
+                setScannerError(m.scanErrorNoCameraSupport)
                 return
             }
 
@@ -175,7 +227,7 @@ export default function IncidentForm({ incident, onSubmit, onCancel }: IncidentF
                 }
             } catch (caughtError) {
                 console.error(caughtError)
-                setScannerError('Unable to start scanner. Check camera permissions and try again.')
+                setScannerError(m.scanErrorStart)
             }
         }
 
@@ -185,11 +237,11 @@ export default function IncidentForm({ incident, onSubmit, onCancel }: IncidentF
             cancelled = true
             void stopScanner()
         }
-    }, [applyScannedText, isScannerOpen, stopScanner])
+    }, [applyScannedText, isScannerOpen, m.scanErrorNoCameraSupport, m.scanErrorSecureContext, m.scanErrorStart, stopScanner])
 
     const heading = isEditing
-        ? `Edit ${typeof incident?.number === 'object' ? incident.number.display_value || 'Incident' : incident?.number || 'Incident'}`
-        : 'Report New Incident'
+        ? `${m.headingEditPrefix} ${typeof incident?.number === 'object' ? incident.number.display_value || m.incidentFallbackLabel : incident?.number || m.incidentFallbackLabel}`
+        : m.headingReportNew
 
     return (
         <div className="form-overlay">
@@ -203,7 +255,7 @@ export default function IncidentForm({ incident, onSubmit, onCancel }: IncidentF
                 <form onSubmit={handleSubmit}>
                     <div className="form-group">
                         <div className="field-label-row">
-                            <label htmlFor="short_description">Short Description *</label>
+                            <label htmlFor="short_description">{m.shortDescriptionLabel}</label>
                             <button
                                 type="button"
                                 className="scan-button"
@@ -214,7 +266,7 @@ export default function IncidentForm({ incident, onSubmit, onCancel }: IncidentF
                                     setIsScannerOpen(true)
                                 }}
                             >
-                                Scan QR
+                                {m.scanQrButton}
                             </button>
                         </div>
                         <input
@@ -230,7 +282,7 @@ export default function IncidentForm({ incident, onSubmit, onCancel }: IncidentF
                     </div>
 
                     <div className="form-group">
-                        <label htmlFor="description">Description</label>
+                        <label htmlFor="description">{m.descriptionLabel}</label>
                         <textarea
                             id="description"
                             name="description"
@@ -243,39 +295,39 @@ export default function IncidentForm({ incident, onSubmit, onCancel }: IncidentF
 
                     <div className="form-row">
                         <div className="form-group">
-                            <label htmlFor="impact">Impact</label>
+                            <label htmlFor="impact">{m.impactLabel}</label>
                             <select id="impact" name="impact" value={formData.impact} onChange={handleChange}>
-                                <option value="1">1 - High</option>
-                                <option value="2">2 - Medium</option>
-                                <option value="3">3 - Low</option>
+                                <option value="1">{`1 - ${m.impactHigh}`}</option>
+                                <option value="2">{`2 - ${m.impactMedium}`}</option>
+                                <option value="3">{`3 - ${m.impactLow}`}</option>
                             </select>
                         </div>
 
                         <div className="form-group">
-                            <label htmlFor="urgency">Urgency</label>
+                            <label htmlFor="urgency">{m.urgencyLabel}</label>
                             <select id="urgency" name="urgency" value={formData.urgency} onChange={handleChange}>
-                                <option value="1">1 - High</option>
-                                <option value="2">2 - Medium</option>
-                                <option value="3">3 - Low</option>
+                                <option value="1">{`1 - ${m.impactHigh}`}</option>
+                                <option value="2">{`2 - ${m.impactMedium}`}</option>
+                                <option value="3">{`3 - ${m.impactLow}`}</option>
                             </select>
                         </div>
                     </div>
 
                     <div className="form-actions">
                         <button type="button" className="cancel-button" onClick={onCancel}>
-                            Cancel
+                            {m.cancelButton}
                         </button>
                         <button type="submit" className="submit-button">
-                            {isEditing ? 'Update' : 'Submit Incident'}
+                            {isEditing ? m.updateButton : m.submitIncidentButton}
                         </button>
                     </div>
                 </form>
             </div>
             {isScannerOpen && (
-                <div className="scanner-overlay" role="dialog" aria-modal="true" aria-label="Scan QR code">
+                <div className="scanner-overlay" role="dialog" aria-modal="true" aria-label={m.scannerDialogAria}>
                     <div className="scanner-panel">
                         <div className="scanner-header">
-                            <h3>Scan QR Code</h3>
+                            <h3>{m.scannerTitle}</h3>
                             <button type="button" className="close-button" onClick={() => setIsScannerOpen(false)}>
                                 x
                             </button>
@@ -285,12 +337,12 @@ export default function IncidentForm({ incident, onSubmit, onCancel }: IncidentF
                         ) : (
                             <>
                                 <div id="incident-form-qr-reader" className="scanner-reader" />
-                                <p className="scanner-hint">Point your camera at a QR code to auto-fill the form.</p>
+                                <p className="scanner-hint">{m.scannerHint}</p>
                             </>
                         )}
                         <div className="scanner-actions">
                             <button type="button" className="cancel-button" onClick={() => setIsScannerOpen(false)}>
-                                Close
+                                {m.closeButton}
                             </button>
                         </div>
                     </div>

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './app.css'
-import IncidentForm from './components/IncidentForm'
+import IncidentForm, { type IncidentFormMessages } from './components/IncidentForm'
 import {
     IncidentRecord,
     IncidentService,
@@ -10,18 +10,400 @@ import {
     type IncidentStateValue,
 } from './services/IncidentService'
 
-const STATE_LABEL: Record<string, string> = {
-    '1': 'Ready for Work',
-    '2': 'In Progress',
-    '3': 'On Hold',
-    '6': 'Complete',
-    '7': 'Closed',
-}
-
 const DEFAULT_ESTIMATE_MINUTES = 15
 const INCIDENT_CACHE_KEY = 'incident-workflow-cache-v1'
 const PENDING_MUTATIONS_KEY = 'incident-workflow-pending-v1'
 const REPORTED_INCIDENT_IDS_KEY = 'incident-workflow-reported-v1'
+const LANGUAGE_STORAGE_KEY = 'incident-workflow-language-v1'
+const LANGUAGE_OPTIONS = [
+    { code: 'en', label: 'English', locale: 'en-US' },
+    { code: 'es', label: 'Espanol', locale: 'es-ES' },
+    { code: 'fr', label: 'Francais', locale: 'fr-FR' },
+] as const
+
+type LanguageCode = (typeof LANGUAGE_OPTIONS)[number]['code']
+type ActionId = 'start' | 'pause' | 'complete' | 'incomplete' | 'resume'
+type ActionDefinition = { id: ActionId; nextState: IncidentStateValue; tone: string }
+type Messages = {
+    serviceOperations: string
+    incidentWorkflow: string
+    myAssignedIncidents: string
+    refresh: string
+    searchPlaceholder: string
+    filterIncidentsAriaLabel: string
+    all: string
+    open: string
+    completed: string
+    reportIssue: string
+    complete: string
+    inProgress: string
+    onHold: string
+    remaining: string
+    offlineModeBanner: string
+    queuedChangesPending: (count: number) => string
+    loadingAssignedIncidents: string
+    noAssignedIncidentsFound: string
+    hide: string
+    show: string
+    state: string
+    assignedTo: string
+    due: string
+    comments: string
+    addWorkNotesPlaceholder: string
+    saveComment: string
+    resolutionCode: string
+    selectResolutionCode: string
+    closeNotes: string
+    addCloseNotesPlaceholder: string
+    saveAndComplete: string
+    priority: string
+    location: string
+    description: string
+    notSet: string
+    noDetailsProvided: string
+    orders: string
+    language: string
+    logout: string
+    profile: string
+    currentUser: string
+    incident: string
+    noSummary: string
+    new: string
+    noDate: string
+    noUpcomingDueTime: string
+    noOpenItems: string
+    headerTaskSummary: (openCount: number, estimateLabel: string) => string
+    nextLabel: (text: string) => string
+    timerEstimate: (elapsed: string, minutes: number) => string
+    newIncidentAssigned: (ticket: string) => string
+    newIncidentsAssigned: (count: number) => string
+    failedToLoadIncidents: string
+    couldNotSyncOfflineUpdates: string
+    syncedOfflineChanges: (count: number) => string
+    offlineIncidentUpdateQueued: string
+    connectionLostIncidentUpdateQueued: string
+    couldNotUpdateIncidentState: string
+    offlineCommentQueued: string
+    connectionLostCommentQueued: string
+    couldNotSaveComment: string
+    connectOnlineFirst: string
+    offlineNewIncidentQueued: string
+    incidentSubmittedSuccessfully: (ticket: string) => string
+    connectionLostNewIncidentQueued: string
+    couldNotSubmitIncident: string
+    stateLabels: Record<string, string>
+    actionLabels: Record<ActionId, string>
+    form: IncidentFormMessages
+}
+
+const EN_MESSAGES: Messages = {
+    serviceOperations: 'Service Operations',
+    incidentWorkflow: 'Incident Workflow',
+    myAssignedIncidents: 'My Assigned Incidents',
+    refresh: 'Refresh',
+    searchPlaceholder: 'Search incidents by number, summary, or location',
+    filterIncidentsAriaLabel: 'Filter incidents by completion status',
+    all: 'All',
+    open: 'Open',
+    completed: 'Completed',
+    reportIssue: 'Report Issue',
+    complete: 'Complete',
+    inProgress: 'In Progress',
+    onHold: 'On Hold',
+    remaining: 'Remaining',
+    offlineModeBanner: 'Offline mode: changes are queued and will sync when online.',
+    queuedChangesPending: (count) => `${count} queued change${count === 1 ? '' : 's'} pending sync.`,
+    loadingAssignedIncidents: 'Loading assigned incidents...',
+    noAssignedIncidentsFound: 'No assigned incidents found.',
+    hide: 'Hide',
+    show: 'Show',
+    state: 'State',
+    assignedTo: 'Assigned to',
+    due: 'Due',
+    comments: 'Comments',
+    addWorkNotesPlaceholder: 'Add work notes...',
+    saveComment: 'Save Comment',
+    resolutionCode: 'Resolution code',
+    selectResolutionCode: 'Select resolution code',
+    closeNotes: 'Close notes',
+    addCloseNotesPlaceholder: 'Add close notes...',
+    saveAndComplete: 'Save And Complete',
+    priority: 'Priority',
+    location: 'Location',
+    description: 'Description',
+    notSet: 'Not set',
+    noDetailsProvided: 'No details provided',
+    orders: 'Orders',
+    language: 'Language',
+    logout: 'Logout',
+    profile: 'Profile',
+    currentUser: 'Current User',
+    incident: 'Incident',
+    noSummary: 'No summary',
+    new: 'New',
+    noDate: 'No date',
+    noUpcomingDueTime: 'No upcoming due time',
+    noOpenItems: 'No open items',
+    headerTaskSummary: (openCount, estimateLabel) => `${openCount} Tasks Today Est ${estimateLabel} Complete`,
+    nextLabel: (text) => `Next: ${text}`,
+    timerEstimate: (elapsed, minutes) => `${elapsed} / ${minutes} min est.`,
+    newIncidentAssigned: (ticket) => `New incident assigned: ${ticket}`,
+    newIncidentsAssigned: (count) => `${count} new incidents assigned to you.`,
+    failedToLoadIncidents: 'Failed to load incidents.',
+    couldNotSyncOfflineUpdates: 'Could not sync offline updates.',
+    syncedOfflineChanges: (count) => `Synced ${count} offline change${count === 1 ? '' : 's'}.`,
+    offlineIncidentUpdateQueued: 'You are offline. Incident update queued and will sync automatically.',
+    connectionLostIncidentUpdateQueued: 'Connection lost. Incident update queued and will sync automatically.',
+    couldNotUpdateIncidentState: 'Could not update incident state.',
+    offlineCommentQueued: 'You are offline. Comment queued and will sync automatically.',
+    connectionLostCommentQueued: 'Connection lost. Comment queued and will sync automatically.',
+    couldNotSaveComment: 'Could not save comment.',
+    connectOnlineFirst: 'Connect once online to load incidents before using offline mode.',
+    offlineNewIncidentQueued: 'You are offline. New incident report queued and will sync automatically.',
+    incidentSubmittedSuccessfully: (ticket) => `${ticket} was submitted successfully.`,
+    connectionLostNewIncidentQueued: 'Connection lost. New incident report queued and will sync automatically.',
+    couldNotSubmitIncident: 'Could not submit incident.',
+    stateLabels: {
+        '1': 'Ready for Work',
+        '2': 'In Progress',
+        '3': 'On Hold',
+        '6': 'Complete',
+        '7': 'Closed',
+    },
+    actionLabels: {
+        start: 'Start',
+        pause: 'Pause',
+        complete: 'Complete',
+        incomplete: 'Incomplete',
+        resume: 'Resume',
+    },
+    form: {
+        incidentFallbackLabel: 'Incident',
+        headingEditPrefix: 'Edit',
+        headingReportNew: 'Report New Incident',
+        shortDescriptionLabel: 'Short Description *',
+        descriptionLabel: 'Description',
+        impactLabel: 'Impact',
+        urgencyLabel: 'Urgency',
+        impactHigh: 'High',
+        impactMedium: 'Medium',
+        impactLow: 'Low',
+        cancelButton: 'Cancel',
+        updateButton: 'Update',
+        submitIncidentButton: 'Submit Incident',
+        scanQrButton: 'Scan QR',
+        scanStatusSuccess: 'QR code scanned. Fields updated.',
+        scanErrorSecureContext: 'Camera access requires HTTPS or localhost.',
+        scanErrorNoCameraSupport: 'This browser does not support camera capture.',
+        scanErrorStart: 'Unable to start scanner. Check camera permissions and try again.',
+        scannerDialogAria: 'Scan QR code',
+        scannerTitle: 'Scan QR Code',
+        scannerHint: 'Point your camera at a QR code to auto-fill the form.',
+        closeButton: 'Close',
+    },
+}
+
+const ES_MESSAGES: Messages = {
+    ...EN_MESSAGES,
+    serviceOperations: 'Operaciones de Servicio',
+    incidentWorkflow: 'Flujo de Incidentes',
+    myAssignedIncidents: 'Mis Incidentes Asignados',
+    refresh: 'Actualizar',
+    searchPlaceholder: 'Buscar incidentes por numero, resumen o ubicacion',
+    filterIncidentsAriaLabel: 'Filtrar incidentes por estado de finalizacion',
+    all: 'Todos',
+    open: 'Abiertos',
+    completed: 'Completados',
+    reportIssue: 'Reportar Incidente',
+    complete: 'Completados',
+    inProgress: 'En Progreso',
+    onHold: 'En Espera',
+    remaining: 'Restantes',
+    offlineModeBanner: 'Modo sin conexion: los cambios se guardan y se sincronizan al volver en linea.',
+    loadingAssignedIncidents: 'Cargando incidentes asignados...',
+    noAssignedIncidentsFound: 'No se encontraron incidentes asignados.',
+    hide: 'Ocultar',
+    show: 'Mostrar',
+    state: 'Estado',
+    assignedTo: 'Asignado a',
+    due: 'Vence',
+    comments: 'Comentarios',
+    addWorkNotesPlaceholder: 'Agregar notas de trabajo...',
+    saveComment: 'Guardar Comentario',
+    resolutionCode: 'Codigo de resolucion',
+    selectResolutionCode: 'Seleccionar codigo de resolucion',
+    closeNotes: 'Notas de cierre',
+    addCloseNotesPlaceholder: 'Agregar notas de cierre...',
+    saveAndComplete: 'Guardar y Completar',
+    priority: 'Prioridad',
+    location: 'Ubicacion',
+    notSet: 'No definido',
+    noDetailsProvided: 'Sin detalles',
+    orders: 'Ordenes',
+    language: 'Idioma',
+    logout: 'Cerrar sesion',
+    profile: 'Perfil',
+    currentUser: 'Usuario Actual',
+    noSummary: 'Sin resumen',
+    new: 'Nuevo',
+    noDate: 'Sin fecha',
+    noUpcomingDueTime: 'Sin proximo vencimiento',
+    noOpenItems: 'Sin elementos abiertos',
+    headerTaskSummary: (openCount, estimateLabel) => `${openCount} tareas hoy, estimado ${estimateLabel}`,
+    nextLabel: (text) => `Siguiente: ${text}`,
+    timerEstimate: (elapsed, minutes) => `${elapsed} / ${minutes} min est.`,
+    newIncidentAssigned: (ticket) => `Nuevo incidente asignado: ${ticket}`,
+    newIncidentsAssigned: (count) => `${count} incidentes nuevos asignados.`,
+    failedToLoadIncidents: 'No se pudieron cargar los incidentes.',
+    couldNotSyncOfflineUpdates: 'No se pudieron sincronizar los cambios sin conexion.',
+    syncedOfflineChanges: (count) => `Se sincronizaron ${count} cambio${count === 1 ? '' : 's'} sin conexion.`,
+    offlineIncidentUpdateQueued: 'Sin conexion. El cambio del incidente se pondra en cola.',
+    connectionLostIncidentUpdateQueued: 'Se perdio la conexion. El cambio del incidente se pondra en cola.',
+    couldNotUpdateIncidentState: 'No se pudo actualizar el estado del incidente.',
+    offlineCommentQueued: 'Sin conexion. El comentario se pondra en cola.',
+    connectionLostCommentQueued: 'Se perdio la conexion. El comentario se pondra en cola.',
+    couldNotSaveComment: 'No se pudo guardar el comentario.',
+    connectOnlineFirst: 'Conectate en linea al menos una vez antes de usar modo sin conexion.',
+    offlineNewIncidentQueued: 'Sin conexion. El nuevo incidente se pondra en cola.',
+    incidentSubmittedSuccessfully: (ticket) => `${ticket} se envio correctamente.`,
+    connectionLostNewIncidentQueued: 'Se perdio la conexion. El nuevo incidente se pondra en cola.',
+    couldNotSubmitIncident: 'No se pudo enviar el incidente.',
+    stateLabels: {
+        '1': 'Listo para Trabajar',
+        '2': 'En Progreso',
+        '3': 'En Espera',
+        '6': 'Completado',
+        '7': 'Cerrado',
+    },
+    actionLabels: {
+        start: 'Iniciar',
+        pause: 'Pausar',
+        complete: 'Completar',
+        incomplete: 'Incompleto',
+        resume: 'Reanudar',
+    },
+    form: {
+        ...EN_MESSAGES.form,
+        headingEditPrefix: 'Editar',
+        headingReportNew: 'Reportar Nuevo Incidente',
+        shortDescriptionLabel: 'Descripcion corta *',
+        descriptionLabel: 'Descripcion',
+        impactLabel: 'Impacto',
+        urgencyLabel: 'Urgencia',
+        cancelButton: 'Cancelar',
+        updateButton: 'Actualizar',
+        submitIncidentButton: 'Enviar Incidente',
+        scanStatusSuccess: 'Codigo QR escaneado. Campos actualizados.',
+        scanErrorStart: 'No se pudo iniciar el escaner. Revisa permisos de camara.',
+        scannerTitle: 'Escanear Codigo QR',
+        scannerHint: 'Apunta la camara a un codigo QR para completar el formulario.',
+        closeButton: 'Cerrar',
+    },
+}
+
+const FR_MESSAGES: Messages = {
+    ...EN_MESSAGES,
+    serviceOperations: 'Operations de Service',
+    incidentWorkflow: 'Flux des Incidents',
+    myAssignedIncidents: 'Mes Incidents Assignes',
+    refresh: 'Actualiser',
+    searchPlaceholder: 'Rechercher par numero, resume ou emplacement',
+    filterIncidentsAriaLabel: 'Filtrer les incidents par statut',
+    all: 'Tous',
+    open: 'Ouverts',
+    completed: 'Termines',
+    reportIssue: 'Signaler Incident',
+    complete: 'Termines',
+    inProgress: 'En Cours',
+    onHold: 'En Attente',
+    remaining: 'Restants',
+    offlineModeBanner: 'Mode hors ligne: les changements sont mis en file et synchronises au retour en ligne.',
+    loadingAssignedIncidents: 'Chargement des incidents assignes...',
+    noAssignedIncidentsFound: 'Aucun incident assigne.',
+    hide: 'Masquer',
+    show: 'Afficher',
+    state: 'Etat',
+    assignedTo: 'Assigne a',
+    due: 'Echeance',
+    comments: 'Commentaires',
+    addWorkNotesPlaceholder: 'Ajouter des notes...',
+    saveComment: 'Enregistrer Commentaire',
+    resolutionCode: 'Code de resolution',
+    selectResolutionCode: 'Selectionner code de resolution',
+    closeNotes: 'Notes de cloture',
+    addCloseNotesPlaceholder: 'Ajouter des notes de cloture...',
+    saveAndComplete: 'Enregistrer et Terminer',
+    priority: 'Priorite',
+    location: 'Emplacement',
+    notSet: 'Non defini',
+    noDetailsProvided: 'Aucun detail',
+    orders: 'Commandes',
+    language: 'Langue',
+    logout: 'Deconnexion',
+    profile: 'Profil',
+    currentUser: 'Utilisateur Actuel',
+    noSummary: 'Sans resume',
+    new: 'Nouveau',
+    noDate: 'Pas de date',
+    noUpcomingDueTime: 'Aucune echeance a venir',
+    noOpenItems: 'Aucun element ouvert',
+    headerTaskSummary: (openCount, estimateLabel) => `${openCount} taches aujourd'hui, estimation ${estimateLabel}`,
+    nextLabel: (text) => `Suivant: ${text}`,
+    timerEstimate: (elapsed, minutes) => `${elapsed} / ${minutes} min estimees`,
+    newIncidentAssigned: (ticket) => `Nouvel incident assigne: ${ticket}`,
+    newIncidentsAssigned: (count) => `${count} nouveaux incidents assignes.`,
+    failedToLoadIncidents: "Echec du chargement des incidents.",
+    couldNotSyncOfflineUpdates: 'Impossible de synchroniser les changements hors ligne.',
+    syncedOfflineChanges: (count) => `${count} changement${count === 1 ? '' : 's'} hors ligne synchronise(s).`,
+    offlineIncidentUpdateQueued: "Hors ligne. La mise a jour de l'incident est mise en file.",
+    connectionLostIncidentUpdateQueued: "Connexion perdue. La mise a jour de l'incident est mise en file.",
+    couldNotUpdateIncidentState: "Impossible de mettre a jour l'etat de l'incident.",
+    offlineCommentQueued: 'Hors ligne. Le commentaire est mis en file.',
+    connectionLostCommentQueued: 'Connexion perdue. Le commentaire est mis en file.',
+    couldNotSaveComment: 'Impossible de sauvegarder le commentaire.',
+    connectOnlineFirst: 'Connectez-vous une fois en ligne avant le mode hors ligne.',
+    offlineNewIncidentQueued: 'Hors ligne. Le nouvel incident est mis en file.',
+    incidentSubmittedSuccessfully: (ticket) => `${ticket} a ete soumis avec succes.`,
+    connectionLostNewIncidentQueued: 'Connexion perdue. Le nouvel incident est mis en file.',
+    couldNotSubmitIncident: "Impossible d'envoyer l'incident.",
+    stateLabels: {
+        '1': 'Pret a Travailler',
+        '2': 'En Cours',
+        '3': 'En Attente',
+        '6': 'Termine',
+        '7': 'Ferme',
+    },
+    actionLabels: {
+        start: 'Demarrer',
+        pause: 'Pause',
+        complete: 'Terminer',
+        incomplete: 'Incomplet',
+        resume: 'Reprendre',
+    },
+    form: {
+        ...EN_MESSAGES.form,
+        headingEditPrefix: 'Modifier',
+        headingReportNew: 'Signaler Nouvel Incident',
+        shortDescriptionLabel: 'Description courte *',
+        impactLabel: 'Impact',
+        urgencyLabel: 'Urgence',
+        cancelButton: 'Annuler',
+        updateButton: 'Mettre a jour',
+        submitIncidentButton: 'Soumettre Incident',
+        scanStatusSuccess: 'QR scanne. Champs mis a jour.',
+        scanErrorStart: 'Impossible de demarrer le scanner. Verifiez les permissions camera.',
+        scannerTitle: 'Scanner Code QR',
+        scannerHint: 'Pointez la camera vers un QR code pour remplir le formulaire.',
+        closeButton: 'Fermer',
+    },
+}
+
+const MESSAGES_BY_LANGUAGE: Record<LanguageCode, Messages> = {
+    en: EN_MESSAGES,
+    es: ES_MESSAGES,
+    fr: FR_MESSAGES,
+}
+
 const FALLBACK_RESOLUTION_CODES: ChoiceOption[] = [
     { value: 'Duplicate', label: 'Duplicate' },
     { value: 'Known error', label: 'Known error' },
@@ -46,6 +428,26 @@ type PendingMutation =
     | { id: string; type: 'setState'; incidentId: string; state: IncidentStateValue; extraFields?: Record<string, string> }
     | { id: string; type: 'addWorkNote'; incidentId: string; note: string }
     | { id: string; type: 'createIncident'; payload: ReportIssuePayload }
+
+function resolveInitialLanguage(): LanguageCode {
+    try {
+        const saved = window.localStorage.getItem(LANGUAGE_STORAGE_KEY)
+        if (saved === 'en' || saved === 'es' || saved === 'fr') {
+            return saved
+        }
+    } catch {
+        // noop
+    }
+
+    const browser = window.navigator.language.toLowerCase()
+    if (browser.startsWith('es')) {
+        return 'es'
+    }
+    if (browser.startsWith('fr')) {
+        return 'fr'
+    }
+    return 'en'
+}
 
 function readJson<T>(key: string, fallback: T): T {
     try {
@@ -83,9 +485,9 @@ function formatDuration(seconds: number) {
     return `${hours}:${minutes}:${remaining}`
 }
 
-function formatDate(input: string) {
+function formatDate(input: string, locale: string, emptyLabel: string) {
     if (!input) {
-        return 'No date'
+        return emptyLabel
     }
 
     const parsed = new Date(input)
@@ -93,7 +495,7 @@ function formatDate(input: string) {
         return input
     }
 
-    return new Intl.DateTimeFormat('en-US', {
+    return new Intl.DateTimeFormat(locale, {
         month: '2-digit',
         day: '2-digit',
         year: 'numeric',
@@ -102,9 +504,9 @@ function formatDate(input: string) {
     }).format(parsed)
 }
 
-function formatNextTime(input: string) {
+function formatNextTime(input: string, locale: string, emptyLabel: string) {
     if (!input) {
-        return 'No upcoming due time'
+        return emptyLabel
     }
 
     const parsed = new Date(input)
@@ -112,7 +514,7 @@ function formatNextTime(input: string) {
         return input
     }
 
-    return new Intl.DateTimeFormat('en-US', {
+    return new Intl.DateTimeFormat(locale, {
         hour: 'numeric',
         minute: '2-digit',
         hour12: true,
@@ -121,22 +523,22 @@ function formatNextTime(input: string) {
     }).format(parsed)
 }
 
-function getActionsForState(state: string): { label: string; nextState: IncidentStateValue; tone: string }[] {
+function getActionsForState(state: string): ActionDefinition[] {
     if (state === '1') {
-        return [{ label: 'Start', nextState: '2', tone: 'primary' }]
+        return [{ id: 'start', nextState: '2', tone: 'primary' }]
     }
     if (state === '2') {
         return [
-            { label: 'Pause', nextState: '3', tone: 'warning' },
-            { label: 'Complete', nextState: '6', tone: 'primary' },
-            { label: 'Incomplete', nextState: '3', tone: 'danger' },
+            { id: 'pause', nextState: '3', tone: 'warning' },
+            { id: 'complete', nextState: '6', tone: 'primary' },
+            { id: 'incomplete', nextState: '3', tone: 'danger' },
         ]
     }
     if (state === '3') {
         return [
-            { label: 'Resume', nextState: '2', tone: 'warning' },
-            { label: 'Complete', nextState: '6', tone: 'primary' },
-            { label: 'Incomplete', nextState: '3', tone: 'danger' },
+            { id: 'resume', nextState: '2', tone: 'warning' },
+            { id: 'complete', nextState: '6', tone: 'primary' },
+            { id: 'incomplete', nextState: '3', tone: 'danger' },
         ]
     }
     return []
@@ -201,6 +603,8 @@ function navLabel(label: string, maxLength = 10) {
 
 export default function App() {
     const incidentService = useMemo(() => new IncidentService(), [])
+    const [language, setLanguage] = useState<LanguageCode>(() => resolveInitialLanguage())
+    const [showLanguageMenu, setShowLanguageMenu] = useState(false)
     const [incidents, setIncidents] = useState<IncidentRecord[]>([])
     const [expanded, setExpanded] = useState<Record<string, boolean>>({})
     const [searchText, setSearchText] = useState('')
@@ -216,7 +620,7 @@ export default function App() {
     const [resolveDrafts, setResolveDrafts] = useState<Record<string, { code: string; notes: string }>>({})
     const [closeCodeOptions] = useState<ChoiceOption[]>(FALLBACK_RESOLUTION_CODES)
     const [showReportForm, setShowReportForm] = useState(false)
-    const [profileLabel, setProfileLabel] = useState('Profile')
+    const [profileLabel, setProfileLabel] = useState(EN_MESSAGES.profile)
     const [completionFilter, setCompletionFilter] = useState<'all' | 'open' | 'completed'>('all')
     const [toastMessage, setToastMessage] = useState('')
     const seenIncidentIdsRef = useRef<Set<string> | null>(null)
@@ -226,6 +630,11 @@ export default function App() {
     const [hasLoadedFromServer, setHasLoadedFromServer] = useState(false)
     const [reportedIncidentIds, setReportedIncidentIds] = useState<string[]>(() =>
         readJson<string[]>(REPORTED_INCIDENT_IDS_KEY, [])
+    )
+    const messages = useMemo(() => MESSAGES_BY_LANGUAGE[language], [language])
+    const locale = useMemo(
+        () => LANGUAGE_OPTIONS.find((option) => option.code === language)?.locale || 'en-US',
+        [language]
     )
     const shouldAutoRefresh = !updatingId && !activeResolveId && !activeCommentId && !showReportForm
 
@@ -263,6 +672,14 @@ export default function App() {
     }, [])
 
     useEffect(() => {
+        try {
+            window.localStorage.setItem(LANGUAGE_STORAGE_KEY, language)
+        } catch {
+            // noop
+        }
+    }, [language])
+
+    useEffect(() => {
         setPendingSyncCount(getPendingMutations().length)
     }, [getPendingMutations])
 
@@ -292,9 +709,9 @@ export default function App() {
             if (previousIds) {
                 const newlyAssigned = data.filter((incident) => !previousIds.has(value(incident.sys_id)))
                 if (newlyAssigned.length === 1) {
-                    setToastMessage(`New incident assigned: ${display(newlyAssigned[0].number, 'Incident')}`)
+                    setToastMessage(messages.newIncidentAssigned(display(newlyAssigned[0].number, messages.incident)))
                 } else if (newlyAssigned.length > 1) {
-                    setToastMessage(`${newlyAssigned.length} new incidents assigned to you.`)
+                    setToastMessage(messages.newIncidentsAssigned(newlyAssigned.length))
                 }
             }
             seenIncidentIdsRef.current = nextIds
@@ -321,13 +738,13 @@ export default function App() {
                     setIncidents(cached)
                 }
             }
-            setError((caughtError as Error).message || 'Failed to load incidents.')
+            setError((caughtError as Error).message || messages.failedToLoadIncidents)
         } finally {
             if (!silent) {
                 setLoading(false)
             }
         }
-    }, [incidentService, isOnline])
+    }, [incidentService, isOnline, messages])
 
     const syncPendingMutations = useCallback(async () => {
         if (!window.navigator.onLine || syncInFlightRef.current) {
@@ -363,19 +780,19 @@ export default function App() {
                 setPendingMutations(remaining)
             } catch (caughtError) {
                 if (!isNetworkError(caughtError)) {
-                    setError((caughtError as Error).message || 'Could not sync offline updates.')
+                    setError((caughtError as Error).message || messages.couldNotSyncOfflineUpdates)
                 }
                 break
             }
         }
 
         if (processed > 0) {
-            setSuccess(`Synced ${processed} offline change${processed === 1 ? '' : 's'}.`)
+            setSuccess(messages.syncedOfflineChanges(processed))
             await refreshIncidents({ silent: true })
         }
 
         syncInFlightRef.current = false
-    }, [getPendingMutations, incidentService, markReportedIncident, refreshIncidents, setPendingMutations])
+    }, [getPendingMutations, incidentService, markReportedIncident, messages, refreshIncidents, setPendingMutations])
 
     useEffect(() => {
         void refreshIncidents()
@@ -424,6 +841,13 @@ export default function App() {
     }, [])
 
     useEffect(() => {
+        const knownFallbacks = new Set(Object.values(MESSAGES_BY_LANGUAGE).map((entry) => entry.profile))
+        if (knownFallbacks.has(profileLabel)) {
+            setProfileLabel(messages.profile)
+        }
+    }, [messages.profile, profileLabel])
+
+    useEffect(() => {
         if (!toastMessage) {
             return
         }
@@ -436,7 +860,7 @@ export default function App() {
     }, [toastMessage])
 
     useEffect(() => {
-        if (profileLabel !== 'Profile' || incidents.length === 0) {
+        if (profileLabel !== messages.profile || incidents.length === 0) {
             return
         }
 
@@ -444,7 +868,7 @@ export default function App() {
         if (assignedName) {
             setProfileLabel(assignedName)
         }
-    }, [incidents, profileLabel])
+    }, [incidents, messages.profile, profileLabel])
 
     useEffect(() => {
         const timer = window.setInterval(() => {
@@ -533,6 +957,10 @@ export default function App() {
         return sortedIncidents
     }, [completionFilter, sortedIncidents])
     const compactProfileLabel = useMemo(() => navLabel(profileLabel, 9), [profileLabel])
+    const languageLabel = useMemo(
+        () => LANGUAGE_OPTIONS.find((option) => option.code === language)?.label || 'English',
+        [language]
+    )
     const headerSummary = useMemo(() => {
         const openIncidents = sortedWorkQueue.filter((incident) => {
             const state = value(incident.state)
@@ -540,15 +968,16 @@ export default function App() {
         })
         const nextIncident = openIncidents[0]
         const nextTimeRaw = nextIncident ? display(nextIncident.due_date) || display(nextIncident.opened_at) : ''
-        const nextNumber = nextIncident ? display(nextIncident.number, 'Incident') : ''
+        const nextNumber = nextIncident ? display(nextIncident.number, messages.incident) : ''
         const estimatedHours = ((openIncidents.length * DEFAULT_ESTIMATE_MINUTES) / 60).toFixed(1)
+        const nextTimeLabel = formatNextTime(nextTimeRaw, locale, messages.noUpcomingDueTime)
 
         return {
             openCount: openIncidents.length,
             estimateLabel: `${estimatedHours}h`,
-            nextWorkLabel: nextIncident ? `${nextNumber} - ${formatNextTime(nextTimeRaw)}` : 'No open items',
+            nextWorkLabel: nextIncident ? `${nextNumber} - ${nextTimeLabel}` : messages.noOpenItems,
         }
-    }, [sortedWorkQueue])
+    }, [locale, messages.incident, messages.noOpenItems, messages.noUpcomingDueTime, sortedWorkQueue])
 
     const stats = useMemo(() => {
         let complete = 0
@@ -595,7 +1024,7 @@ export default function App() {
             setIncidents((previous) =>
                 previous.map((item) => (value(item.sys_id) === incidentId ? { ...item, state: { value: nextState } } : item))
             )
-            setSuccess('You are offline. Incident update queued and will sync automatically.')
+            setSuccess(messages.offlineIncidentUpdateQueued)
             return
         }
 
@@ -630,9 +1059,9 @@ export default function App() {
                 setIncidents((previous) =>
                     previous.map((item) => (value(item.sys_id) === incidentId ? { ...item, state: { value: nextState } } : item))
                 )
-                setSuccess('Connection lost. Incident update queued and will sync automatically.')
+                setSuccess(messages.connectionLostIncidentUpdateQueued)
             } else {
-                setError((caughtError as Error).message || 'Could not update incident state.')
+                setError((caughtError as Error).message || messages.couldNotUpdateIncidentState)
             }
         } finally {
             setUpdatingId('')
@@ -671,7 +1100,7 @@ export default function App() {
             })
             setCommentDrafts((previous) => ({ ...previous, [incidentId]: '' }))
             setActiveCommentId('')
-            setSuccess('You are offline. Comment queued and will sync automatically.')
+            setSuccess(messages.offlineCommentQueued)
             return
         }
 
@@ -692,9 +1121,9 @@ export default function App() {
                 })
                 setCommentDrafts((previous) => ({ ...previous, [incidentId]: '' }))
                 setActiveCommentId('')
-                setSuccess('Connection lost. Comment queued and will sync automatically.')
+                setSuccess(messages.connectionLostCommentQueued)
             } else {
-                setError((caughtError as Error).message || 'Could not save comment.')
+                setError((caughtError as Error).message || messages.couldNotSaveComment)
             }
         } finally {
             setUpdatingId('')
@@ -703,7 +1132,7 @@ export default function App() {
 
     const submitReportIssue = async (formData: ReportIssuePayload) => {
         if (!hasLoadedFromServer) {
-            setError('Connect once online to load incidents before using offline mode.')
+            setError(messages.connectOnlineFirst)
             return
         }
 
@@ -714,7 +1143,7 @@ export default function App() {
                 payload: formData,
             })
             setShowReportForm(false)
-            setSuccess('You are offline. New incident report queued and will sync automatically.')
+            setSuccess(messages.offlineNewIncidentQueued)
             return
         }
 
@@ -724,8 +1153,8 @@ export default function App() {
         try {
             const created = await incidentService.createIncident(formData)
             markReportedIncident(value(created.sys_id))
-            const ticketNumber = display(created.number, 'Incident')
-            setSuccess(`${ticketNumber} was submitted successfully.`)
+            const ticketNumber = display(created.number, messages.incident)
+            setSuccess(messages.incidentSubmittedSuccessfully(ticketNumber))
             setShowReportForm(false)
             await refreshIncidents()
         } catch (caughtError) {
@@ -737,9 +1166,9 @@ export default function App() {
                     payload: formData,
                 })
                 setShowReportForm(false)
-                setSuccess('Connection lost. New incident report queued and will sync automatically.')
+                setSuccess(messages.connectionLostNewIncidentQueued)
             } else {
-                setError((caughtError as Error).message || 'Could not submit incident.')
+                setError((caughtError as Error).message || messages.couldNotSubmitIncident)
             }
         } finally {
             setLoading(false)
@@ -754,30 +1183,30 @@ export default function App() {
                         IW
                     </div>
                     <div className="hero-brand-text">
-                        <p className="hero-kicker">Service Operations</p>
-                        <h1>Incident Workflow</h1>
+                        <p className="hero-kicker">{messages.serviceOperations}</p>
+                        <h1>{messages.incidentWorkflow}</h1>
                     </div>
                 </div>
                 <div className="hero-user-block">
                     <strong>{profileLabel}</strong>
-                    <span>{`${headerSummary.openCount} Tasks Today Est ${headerSummary.estimateLabel} Complete`}</span>
-                    <span>{`Next: ${headerSummary.nextWorkLabel}`}</span>
+                    <span>{messages.headerTaskSummary(headerSummary.openCount, headerSummary.estimateLabel)}</span>
+                    <span>{messages.nextLabel(headerSummary.nextWorkLabel)}</span>
                 </div>
             </header>
 
             <header className="app-top-header">
                 <div>
-                    <p className="muted-label">My Assigned Incidents</p>
+                    <p className="muted-label">{messages.myAssignedIncidents}</p>
                 </div>
                 <button className="refresh-button" onClick={() => void refreshIncidents()} disabled={loading}>
-                    Refresh
+                    {messages.refresh}
                 </button>
             </header>
 
             <section className="search-row">
                 <input
                     className="search-input"
-                    placeholder="Search incidents by number, summary, or location"
+                    placeholder={messages.searchPlaceholder}
                     value={searchText}
                     onChange={(event) => setSearchText(event.target.value)}
                 />
@@ -785,31 +1214,31 @@ export default function App() {
                     className="search-filter"
                     value={completionFilter}
                     onChange={(event) => setCompletionFilter(event.target.value as 'all' | 'open' | 'completed')}
-                    aria-label="Filter incidents by completion status"
+                    aria-label={messages.filterIncidentsAriaLabel}
                 >
-                    <option value="all">All</option>
-                    <option value="open">Open</option>
-                    <option value="completed">Completed</option>
+                    <option value="all">{messages.all}</option>
+                    <option value="open">{messages.open}</option>
+                    <option value="completed">{messages.completed}</option>
                 </select>
                 <button className="report-button" type="button" onClick={() => setShowReportForm(true)}>
-                    Report Issue
+                    {messages.reportIssue}
                 </button>
             </section>
 
             <section className="stats-row">
-                <div className="stat-item">{stats.complete} Complete</div>
-                <div className="stat-item">{stats.inProgress} In Progress</div>
-                <div className="stat-item">{stats.onHold} On Hold</div>
-                <div className="stat-item">{stats.remaining} Remaining</div>
+                <div className="stat-item">{`${stats.complete} ${messages.complete}`}</div>
+                <div className="stat-item">{`${stats.inProgress} ${messages.inProgress}`}</div>
+                <div className="stat-item">{`${stats.onHold} ${messages.onHold}`}</div>
+                <div className="stat-item">{`${stats.remaining} ${messages.remaining}`}</div>
             </section>
 
-            {!isOnline && <div className="offline-banner">Offline mode: changes are queued and will sync when online.</div>}
+            {!isOnline && <div className="offline-banner">{messages.offlineModeBanner}</div>}
             {pendingSyncCount > 0 && (
-                <div className="pending-sync-banner">{pendingSyncCount} queued change{pendingSyncCount === 1 ? '' : 's'} pending sync.</div>
+                <div className="pending-sync-banner">{messages.queuedChangesPending(pendingSyncCount)}</div>
             )}
             {error && <div className="error-banner">{error}</div>}
             {success && <div className="success-banner">{success}</div>}
-            {loading && <div className="loading-banner">Loading assigned incidents...</div>}
+            {loading && <div className="loading-banner">{messages.loadingAssignedIncidents}</div>}
             {toastMessage && (
                 <div className="toast-notice" role="status" aria-live="polite">
                     {toastMessage}
@@ -817,7 +1246,7 @@ export default function App() {
             )}
 
             <main className="incident-list-cards">
-                {!loading && visibleIncidents.length === 0 && <p className="empty-state">No assigned incidents found.</p>}
+                {!loading && visibleIncidents.length === 0 && <p className="empty-state">{messages.noAssignedIncidentsFound}</p>}
 
                 {visibleIncidents.map((incident) => {
                     const incidentId = value(incident.sys_id)
@@ -841,19 +1270,19 @@ export default function App() {
                                 }
                             >
                                 <span>
-                                    <strong>{display(incident.number, 'Incident')}</strong>
-                                    <span className="subtitle">{display(incident.short_description, 'No summary')}</span>
+                                    <strong>{display(incident.number, messages.incident)}</strong>
+                                    <span className="subtitle">{display(incident.short_description, messages.noSummary)}</span>
                                 </span>
-                                <span>{isExpanded ? 'Hide' : 'Show'}</span>
+                                <span>{isExpanded ? messages.hide : messages.show}</span>
                             </button>
 
-                            <p className="incident-meta">State: {STATE_LABEL[state] || display(incident.state, 'New')}</p>
-                            <p className="incident-meta">Assigned to: {display(incident.assigned_to, 'Current User')}</p>
-                            <p className="incident-meta">Due: {formatDate(display(incident.due_date) || display(incident.opened_at))}</p>
+                            <p className="incident-meta">{`${messages.state}: ${messages.stateLabels[state] || display(incident.state, messages.new)}`}</p>
+                            <p className="incident-meta">{`${messages.assignedTo}: ${display(incident.assigned_to, messages.currentUser)}`}</p>
+                            <p className="incident-meta">{`${messages.due}: ${formatDate(display(incident.due_date) || display(incident.opened_at), locale, messages.noDate)}`}</p>
 
                             {state === '2' && (
                                 <>
-                                    <div className="timer-chip">{`${formatDuration(elapsedSeconds)} / ${DEFAULT_ESTIMATE_MINUTES} min est.`}</div>
+                                    <div className="timer-chip">{messages.timerEstimate(formatDuration(elapsedSeconds), DEFAULT_ESTIMATE_MINUTES)}</div>
                                     <div className="timer-track">
                                         <div className="timer-progress" style={{ width: `${progress}%` }} />
                                     </div>
@@ -864,9 +1293,9 @@ export default function App() {
                                 {actions.map((action) => (
                                     <button
                                         className={`action-button action-${action.tone}`}
-                                        key={action.label}
+                                        key={action.id}
                                         onClick={() => {
-                                            if (action.label === 'Complete') {
+                                            if (action.id === 'complete') {
                                                 setActiveResolveId((previous) => (previous === incidentId ? '' : incidentId))
                                                 return
                                             }
@@ -874,7 +1303,7 @@ export default function App() {
                                         }}
                                         disabled={updatingId === incidentId}
                                     >
-                                        {action.label}
+                                        {messages.actionLabels[action.id]}
                                     </button>
                                 ))}
                                 <button
@@ -882,7 +1311,7 @@ export default function App() {
                                     type="button"
                                     onClick={() => setActiveCommentId((previous) => (previous === incidentId ? '' : incidentId))}
                                 >
-                                    Comments
+                                    {messages.comments}
                                 </button>
                             </div>
 
@@ -894,7 +1323,7 @@ export default function App() {
                                         onChange={(event) =>
                                             setCommentDrafts((previous) => ({ ...previous, [incidentId]: event.target.value }))
                                         }
-                                        placeholder="Add work notes..."
+                                        placeholder={messages.addWorkNotesPlaceholder}
                                         rows={3}
                                     />
                                     <button
@@ -903,7 +1332,7 @@ export default function App() {
                                         onClick={() => void submitComment(incident)}
                                         disabled={updatingId === incidentId || !(commentDrafts[incidentId] || '').trim()}
                                     >
-                                        Save Comment
+                                        {messages.saveComment}
                                     </button>
                                 </div>
                             )}
@@ -911,7 +1340,7 @@ export default function App() {
                             {activeResolveId === incidentId && (
                                 <div className="resolve-panel">
                                     <label className="resolve-label" htmlFor={`resolution-code-${incidentId}`}>
-                                        Resolution code
+                                        {messages.resolutionCode}
                                     </label>
                                     <select
                                         id={`resolution-code-${incidentId}`}
@@ -927,7 +1356,7 @@ export default function App() {
                                             }))
                                         }
                                     >
-                                        <option value="">Select resolution code</option>
+                                        <option value="">{messages.selectResolutionCode}</option>
                                         {closeCodeOptions.map((option) => (
                                             <option key={option.value} value={option.value}>
                                                 {option.label}
@@ -936,7 +1365,7 @@ export default function App() {
                                     </select>
 
                                     <label className="resolve-label" htmlFor={`close-notes-${incidentId}`}>
-                                        Close notes
+                                        {messages.closeNotes}
                                     </label>
                                     <textarea
                                         id={`close-notes-${incidentId}`}
@@ -951,7 +1380,7 @@ export default function App() {
                                                 },
                                             }))
                                         }
-                                        placeholder="Add close notes..."
+                                        placeholder={messages.addCloseNotesPlaceholder}
                                         rows={3}
                                     />
                                     <button
@@ -964,7 +1393,7 @@ export default function App() {
                                             !(resolveDrafts[incidentId]?.notes || '').trim()
                                         }
                                     >
-                                        Save And Complete
+                                        {messages.saveAndComplete}
                                     </button>
                                 </div>
                             )}
@@ -972,13 +1401,13 @@ export default function App() {
                             {isExpanded && (
                                 <div className="expanded-details">
                                     <p>
-                                        <strong>Priority:</strong> {display(incident.priority, 'Not set')}
+                                        <strong>{`${messages.priority}:`}</strong> {display(incident.priority, messages.notSet)}
                                     </p>
                                     <p>
-                                        <strong>Location:</strong> {display(incident.location, 'Not set')}
+                                        <strong>{`${messages.location}:`}</strong> {display(incident.location, messages.notSet)}
                                     </p>
                                     <p>
-                                        <strong>Description:</strong> {display(incident.description, 'No details provided')}
+                                        <strong>{`${messages.description}:`}</strong> {display(incident.description, messages.noDetailsProvided)}
                                     </p>
                                 </div>
                             )}
@@ -989,6 +1418,7 @@ export default function App() {
 
             {showReportForm && (
                 <IncidentForm
+                    messages={messages.form}
                     onCancel={() => setShowReportForm(false)}
                     onSubmit={(data) => {
                         void submitReportIssue(data)
@@ -1008,22 +1438,47 @@ export default function App() {
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                         <path d="M4 6h16M4 12h16M4 18h16" />
                     </svg>
-                    <span className="mobile-nav-label">Orders</span>
+                    <span className="mobile-nav-label">{messages.orders}</span>
                 </span>
-                <span className="mobile-nav-item">
+                <button
+                    type="button"
+                    className="mobile-nav-item mobile-nav-button"
+                    onClick={() => setShowLanguageMenu((previous) => !previous)}
+                    aria-expanded={showLanguageMenu}
+                    aria-label={messages.language}
+                >
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                         <circle cx="12" cy="12" r="9" />
                         <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
                     </svg>
-                    <span className="mobile-nav-label">Language</span>
-                </span>
+                    <span className="mobile-nav-label">{languageLabel}</span>
+                </button>
                 <button type="button" className="mobile-nav-item mobile-nav-button" onClick={logoutUser}>
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                         <path d="M10 7V4h10v16H10v-3M14 12H4m0 0 3-3m-3 3 3 3" />
                     </svg>
-                    <span className="mobile-nav-label">Logout</span>
+                    <span className="mobile-nav-label">{messages.logout}</span>
                 </button>
             </footer>
+            {showLanguageMenu && (
+                <div className="language-menu">
+                    <label htmlFor="language-selector">{messages.language}</label>
+                    <select
+                        id="language-selector"
+                        value={language}
+                        onChange={(event) => {
+                            setLanguage(event.target.value as LanguageCode)
+                            setShowLanguageMenu(false)
+                        }}
+                    >
+                        {LANGUAGE_OPTIONS.map((option) => (
+                            <option key={option.code} value={option.code}>
+                                {option.label}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+            )}
         </div>
     )
 }

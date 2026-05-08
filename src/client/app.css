@@ -447,6 +447,38 @@ body {
     padding: 0 0.15rem;
 }
 
+.language-menu {
+    position: fixed;
+    right: 0.75rem;
+    bottom: calc(5.75rem + env(safe-area-inset-bottom, 0px));
+    z-index: 1200;
+    background: #ffffff;
+    border: 1px solid #d1d5db;
+    border-radius: 0.75rem;
+    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.2);
+    padding: 0.65rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    min-width: 170px;
+}
+
+.language-menu label {
+    font-size: 0.75rem;
+    color: #475467;
+    font-weight: 700;
+}
+
+.language-menu select {
+    border: 1px solid #cbd5e1;
+    border-radius: 0.6rem;
+    font: inherit;
+    background: #fff;
+    color: #0f172a;
+    padding: 0.45rem 0.5rem;
+    min-height: 40px;
+}
+
 @media (max-width: 780px) {
     :root {
         --page-gutter: 0.75rem;
@@ -491,6 +523,12 @@ body {
         left: 0.75rem;
         bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
         max-width: none;
+    }
+
+    .language-menu {
+        left: 0.75rem;
+        right: 0.75rem;
+        min-width: 0;
     }
 }
 
