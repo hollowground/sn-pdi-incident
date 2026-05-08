@@ -767,7 +767,7 @@ export default function App() {
 
             <header className="app-top-header">
                 <div>
-                    <p className="muted-label">My assigned incidents</p>
+                    <p className="muted-label">My Assigned Incidents</p>
                 </div>
                 <button className="refresh-button" onClick={() => void refreshIncidents()} disabled={loading}>
                     Refresh
