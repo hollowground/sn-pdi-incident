@@ -11,6 +11,7 @@ This app is designed for frontline incident handling:
 - Transition incident states (`Start`, `Pause`, `Resume`, `Complete`, `Incomplete`)
 - Add work-note comments
 - Report new incidents directly from the app
+- Scan QR codes to prefill new incident details
 - Use the app on mobile without needing a separate mobile URL
 - Continue working offline and sync changes when back online
 
@@ -32,12 +33,17 @@ This app is designed for frontline incident handling:
   - Responsive layout
   - Bottom navigation with icons
   - Safe-area support for modern mobile devices
+- **QR code scanner**
+  - Launch from the `Scan QR` button in the incident report form
+  - Uses device camera on mobile and desktop browsers (secure context required)
+  - Prefills form fields from QR content
 
 ## Tech Stack
 
 - React + TypeScript
 - ServiceNow Fluent SDK (`@servicenow/sdk`)
 - ServiceNow Table API (`/api/now/table/...`)
+- `html5-qrcode` for cross-browser live QR scanning
 
 ## Project Structure
 
@@ -88,6 +94,34 @@ After the first successful online load:
 - Queued actions sync in order when online again.
 - Sync status is shown in-app.
 
+## QR Scanner Usage
+
+- Open `Report Issue` and tap `Scan QR` near `Short Description`.
+- Grant camera access when prompted.
+- Point camera at a QR code to auto-fill fields.
+
+Supported QR payloads:
+
+- Plain text
+  - Sets `short_description` to the scanned text.
+- JSON payload
+  - Supports `short_description`, `description`, `impact`, and `urgency`.
+  - Example:
+
+```json
+{
+  "short_description": "Printer outage - 3rd floor",
+  "description": "Multiple users unable to print to shared device PRN-3F-12.",
+  "impact": "2",
+  "urgency": "1"
+}
+```
+
+Scanner requirements:
+
+- HTTPS or localhost (camera APIs require a secure context).
+- Camera permissions enabled for the browser.
+
 ## Scripts
 
 - `npm run dev` — run development
@@ -100,4 +134,3 @@ After the first successful online load:
 
 - Initial authentication and first data load require online connectivity.
 - Actual write behavior depends on instance ACLs, data policies, and business rules.
-
