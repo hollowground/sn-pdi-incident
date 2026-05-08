@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './app.css'
 import IncidentForm from './components/IncidentForm'
 import { useLanguage } from './hooks/useLanguage'
-import { LANGUAGE_OPTIONS, MESSAGES_BY_LANGUAGE, type ActionId, type LanguageCode, type Messages } from './i18n/messages'
+import { LANGUAGE_OPTIONS, MESSAGES_BY_LANGUAGE, type LanguageCode, type Messages } from './i18n/messages'
+import { getActionsForState } from './utils/incidentActions'
 import { formatDate, formatDuration, formatNextTime } from './utils/formatters'
 import { buildCompletionMotivation } from './utils/motivation'
 import {
@@ -18,7 +19,6 @@ const DEFAULT_ESTIMATE_MINUTES = 15
 const INCIDENT_CACHE_KEY = 'incident-workflow-cache-v1'
 const PENDING_MUTATIONS_KEY = 'incident-workflow-pending-v1'
 const REPORTED_INCIDENT_IDS_KEY = 'incident-workflow-reported-v1'
-type ActionDefinition = { id: ActionId; nextState: IncidentStateValue; tone: string }
 
 const FALLBACK_RESOLUTION_CODES: ChoiceOption[] = [
     { value: 'Duplicate', label: 'Duplicate' },
@@ -71,27 +71,6 @@ function isNetworkError(error: unknown) {
     }
     const message = error.message.toLowerCase()
     return message.includes('failed to fetch') || message.includes('network')
-}
-
-function getActionsForState(state: string): ActionDefinition[] {
-    if (state === '1') {
-        return [{ id: 'start', nextState: '2', tone: 'primary' }]
-    }
-    if (state === '2') {
-        return [
-            { id: 'pause', nextState: '3', tone: 'warning' },
-            { id: 'complete', nextState: '6', tone: 'primary' },
-            { id: 'incomplete', nextState: '3', tone: 'danger' },
-        ]
-    }
-    if (state === '3') {
-        return [
-            { id: 'resume', nextState: '2', tone: 'warning' },
-            { id: 'complete', nextState: '6', tone: 'primary' },
-            { id: 'incomplete', nextState: '3', tone: 'danger' },
-        ]
-    }
-    return []
 }
 
 function resolveProfileNameFromGlobals() {
