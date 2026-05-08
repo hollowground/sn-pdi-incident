@@ -1,0 +1,6 @@
+{
+  "scope": "x_961032_incident",
+  "scopeId": "185c6ac7fc1242ddab32aa1658ef307b",
+  "name": "Incident Modern App",
+  "tsconfigPath": "./src/server/tsconfig.json"
+}
