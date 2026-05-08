@@ -3,6 +3,8 @@ import './app.css'
 import IncidentForm from './components/IncidentForm'
 import { useLanguage } from './hooks/useLanguage'
 import { LANGUAGE_OPTIONS, MESSAGES_BY_LANGUAGE, type ActionId, type LanguageCode, type Messages } from './i18n/messages'
+import { formatDate, formatDuration, formatNextTime } from './utils/formatters'
+import { buildCompletionMotivation } from './utils/motivation'
 import {
     IncidentRecord,
     IncidentService,
@@ -69,52 +71,6 @@ function isNetworkError(error: unknown) {
     }
     const message = error.message.toLowerCase()
     return message.includes('failed to fetch') || message.includes('network')
-}
-
-function formatDuration(seconds: number) {
-    const safeSeconds = Math.max(0, Math.floor(seconds))
-    const hours = String(Math.floor(safeSeconds / 3600)).padStart(2, '0')
-    const minutes = String(Math.floor((safeSeconds % 3600) / 60)).padStart(2, '0')
-    const remaining = String(safeSeconds % 60).padStart(2, '0')
-    return `${hours}:${minutes}:${remaining}`
-}
-
-function formatDate(input: string, locale: string, emptyLabel: string) {
-    if (!input) {
-        return emptyLabel
-    }
-
-    const parsed = new Date(input)
-    if (Number.isNaN(parsed.getTime())) {
-        return input
-    }
-
-    return new Intl.DateTimeFormat(locale, {
-        month: '2-digit',
-        day: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-    }).format(parsed)
-}
-
-function formatNextTime(input: string, locale: string, emptyLabel: string) {
-    if (!input) {
-        return emptyLabel
-    }
-
-    const parsed = new Date(input)
-    if (Number.isNaN(parsed.getTime())) {
-        return input
-    }
-
-    return new Intl.DateTimeFormat(locale, {
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true,
-        month: '2-digit',
-        day: '2-digit',
-    }).format(parsed)
 }
 
 function getActionsForState(state: string): ActionDefinition[] {
@@ -193,25 +149,6 @@ function navLabel(label: string, maxLength = 10) {
         return trimmed
     }
     return `${trimmed.slice(0, maxLength - 1)}…`
-}
-
-function getMotivationName(profileLabel: string, fallbackProfileLabel: string) {
-    const trimmed = profileLabel.trim()
-    if (!trimmed || trimmed === fallbackProfileLabel) {
-        return 'teammate'
-    }
-    const firstToken = trimmed.split(/\s+/)[0]
-    return firstToken || 'teammate'
-}
-
-function buildCompletionMotivation(messages: Messages, profileLabel: string) {
-    const templates = messages.completionMotivationTemplates
-    if (!templates.length) {
-        return ''
-    }
-    const name = getMotivationName(profileLabel, messages.profile)
-    const index = Math.floor(Math.random() * templates.length)
-    return templates[index](name)
 }
 
 export default function App() {
