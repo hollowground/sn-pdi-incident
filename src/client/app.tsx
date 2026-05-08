@@ -492,6 +492,30 @@ export default function App() {
             return toDueTimestamp(a) - toDueTimestamp(b)
         })
     }, [filteredIncidents, reportedIncidentIds])
+    const sortedWorkQueue = useMemo(() => {
+        const reportedSet = new Set(reportedIncidentIds)
+        const toDueTimestamp = (incident: IncidentRecord) => {
+            const raw = display(incident.due_date) || display(incident.opened_at)
+            const time = Date.parse(raw)
+            return Number.isNaN(time) ? Number.POSITIVE_INFINITY : time
+        }
+
+        return [...incidents].sort((a, b) => {
+            const aIsDirect = reportedSet.has(value(a.sys_id))
+            const bIsDirect = reportedSet.has(value(b.sys_id))
+            if (aIsDirect !== bIsDirect) {
+                return aIsDirect ? -1 : 1
+            }
+
+            const aIsComplete = value(a.state) === '6' || value(a.state) === '7'
+            const bIsComplete = value(b.state) === '6' || value(b.state) === '7'
+            if (aIsComplete !== bIsComplete) {
+                return aIsComplete ? 1 : -1
+            }
+
+            return toDueTimestamp(a) - toDueTimestamp(b)
+        })
+    }, [incidents, reportedIncidentIds])
 
     const visibleIncidents = useMemo(() => {
         if (completionFilter === 'open') {
@@ -510,21 +534,21 @@ export default function App() {
     }, [completionFilter, sortedIncidents])
     const compactProfileLabel = useMemo(() => navLabel(profileLabel, 9), [profileLabel])
     const headerSummary = useMemo(() => {
-        const openIncidents = incidents.filter((incident) => {
+        const openIncidents = sortedWorkQueue.filter((incident) => {
             const state = value(incident.state)
             return state !== '6' && state !== '7'
         })
+        const nextIncident = openIncidents[0]
+        const nextTimeRaw = nextIncident ? display(nextIncident.due_date) || display(nextIncident.opened_at) : ''
+        const nextNumber = nextIncident ? display(nextIncident.number, 'Incident') : ''
         const estimatedHours = ((openIncidents.length * DEFAULT_ESTIMATE_MINUTES) / 60).toFixed(1)
-        const nextDueRaw = openIncidents
-            .map((incident) => display(incident.due_date) || display(incident.opened_at))
-            .find((dateText) => Boolean(dateText))
 
         return {
             openCount: openIncidents.length,
             estimateLabel: `${estimatedHours}h`,
-            nextDueLabel: formatNextTime(nextDueRaw || ''),
+            nextWorkLabel: nextIncident ? `${nextNumber} - ${formatNextTime(nextTimeRaw)}` : 'No open items',
         }
-    }, [incidents])
+    }, [sortedWorkQueue])
 
     const stats = useMemo(() => {
         let complete = 0
@@ -737,7 +761,7 @@ export default function App() {
                 <div className="hero-user-block">
                     <strong>{profileLabel}</strong>
                     <span>{`${headerSummary.openCount} Tasks Today Est ${headerSummary.estimateLabel} Complete`}</span>
-                    <span>{`Next: ${headerSummary.nextDueLabel}`}</span>
+                    <span>{`Next: ${headerSummary.nextWorkLabel}`}</span>
                 </div>
             </header>
 
