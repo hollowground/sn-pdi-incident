@@ -91,6 +91,7 @@ type Messages = {
     incidentSubmittedSuccessfully: (ticket: string) => string
     connectionLostNewIncidentQueued: string
     couldNotSubmitIncident: string
+    completionMotivationTemplates: Array<(name: string) => string>
     stateLabels: Record<string, string>
     actionLabels: Record<ActionId, string>
     form: IncidentFormMessages
@@ -163,6 +164,18 @@ const EN_MESSAGES: Messages = {
     incidentSubmittedSuccessfully: (ticket) => `${ticket} was submitted successfully.`,
     connectionLostNewIncidentQueued: 'Connection lost. New incident report queued and will sync automatically.',
     couldNotSubmitIncident: 'Could not submit incident.',
+    completionMotivationTemplates: [
+        (name) => `Nice job resolving another case, ${name}!`,
+        (name) => `Great work, ${name}. Another incident is complete.`,
+        (name) => `${name}, you closed that one out like a pro.`,
+        (name) => `Strong finish, ${name}. Keep it moving.`,
+        (name) => `Excellent progress, ${name}. One more down.`,
+        (name) => `${name}, your momentum is impressive. Incident complete.`,
+        (name) => `Way to go, ${name}! That incident is fully wrapped.`,
+        (name) => `${name}, another win for the queue. Nicely done.`,
+        (name) => `Outstanding execution, ${name}. Case closed.`,
+        (name) => `You are on fire, ${name}. Another incident resolved.`,
+    ],
     stateLabels: {
         '1': 'Ready for Work',
         '2': 'In Progress',
@@ -268,6 +281,7 @@ const ES_MESSAGES: Messages = {
     incidentSubmittedSuccessfully: (ticket) => `${ticket} se envio correctamente.`,
     connectionLostNewIncidentQueued: 'Se perdio la conexion. El nuevo incidente se pondra en cola.',
     couldNotSubmitIncident: 'No se pudo enviar el incidente.',
+    completionMotivationTemplates: EN_MESSAGES.completionMotivationTemplates,
     stateLabels: {
         '1': 'Listo para Trabajar',
         '2': 'En Progreso',
@@ -366,6 +380,7 @@ const FR_MESSAGES: Messages = {
     incidentSubmittedSuccessfully: (ticket) => `${ticket} a ete soumis avec succes.`,
     connectionLostNewIncidentQueued: 'Connexion perdue. Le nouvel incident est mis en file.',
     couldNotSubmitIncident: "Impossible d'envoyer l'incident.",
+    completionMotivationTemplates: EN_MESSAGES.completionMotivationTemplates,
     stateLabels: {
         '1': 'Pret a Travailler',
         '2': 'En Cours',
@@ -599,6 +614,25 @@ function navLabel(label: string, maxLength = 10) {
         return trimmed
     }
     return `${trimmed.slice(0, maxLength - 1)}…`
+}
+
+function getMotivationName(profileLabel: string, fallbackProfileLabel: string) {
+    const trimmed = profileLabel.trim()
+    if (!trimmed || trimmed === fallbackProfileLabel) {
+        return 'teammate'
+    }
+    const firstToken = trimmed.split(/\s+/)[0]
+    return firstToken || 'teammate'
+}
+
+function buildCompletionMotivation(messages: Messages, profileLabel: string) {
+    const templates = messages.completionMotivationTemplates
+    if (!templates.length) {
+        return ''
+    }
+    const name = getMotivationName(profileLabel, messages.profile)
+    const index = Math.floor(Math.random() * templates.length)
+    return templates[index](name)
 }
 
 export default function App() {
@@ -1046,6 +1080,12 @@ export default function App() {
                 }
                 return next
             })
+            if (nextState === '6') {
+                const completionMessage = buildCompletionMotivation(messages, profileLabel)
+                if (completionMessage) {
+                    setToastMessage(completionMessage)
+                }
+            }
         } catch (caughtError) {
             console.error(caughtError)
             if (isNetworkError(caughtError)) {
@@ -1143,7 +1183,8 @@ export default function App() {
                 payload: formData,
             })
             setShowReportForm(false)
-            setSuccess(messages.offlineNewIncidentQueued)
+            setSuccess('')
+            setToastMessage(messages.offlineNewIncidentQueued)
             return
         }
 
@@ -1154,7 +1195,8 @@ export default function App() {
             const created = await incidentService.createIncident(formData)
             markReportedIncident(value(created.sys_id))
             const ticketNumber = display(created.number, messages.incident)
-            setSuccess(messages.incidentSubmittedSuccessfully(ticketNumber))
+            setSuccess('')
+            setToastMessage(messages.incidentSubmittedSuccessfully(ticketNumber))
             setShowReportForm(false)
             await refreshIncidents()
         } catch (caughtError) {
@@ -1166,7 +1208,8 @@ export default function App() {
                     payload: formData,
                 })
                 setShowReportForm(false)
-                setSuccess(messages.connectionLostNewIncidentQueued)
+                setSuccess('')
+                setToastMessage(messages.connectionLostNewIncidentQueued)
             } else {
                 setError((caughtError as Error).message || messages.couldNotSubmitIncident)
             }
