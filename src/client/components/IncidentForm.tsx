@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import './IncidentForm.css'
 
 type IncidentFormData = {
@@ -30,6 +30,11 @@ export default function IncidentForm({ incident, onSubmit, onCancel }: IncidentF
         impact: '2',
         urgency: '2',
     })
+    const [isScannerOpen, setIsScannerOpen] = useState(false)
+    const [scannerError, setScannerError] = useState('')
+    const [scanStatus, setScanStatus] = useState('')
+    const scannerRef = useRef<{ stop: () => Promise<unknown>; clear: () => void } | null>(null)
+    const lastScannedValueRef = useRef('')
 
     useEffect(() => {
         if (!incident) {
@@ -62,6 +67,126 @@ export default function IncidentForm({ incident, onSubmit, onCancel }: IncidentF
         onSubmit(formData)
     }
 
+    const stopScanner = useCallback(async () => {
+        const scanner = scannerRef.current
+        scannerRef.current = null
+        if (!scanner) {
+            return
+        }
+        await scanner.stop().catch(() => undefined)
+        scanner.clear()
+    }, [])
+
+    const applyScannedText = useCallback((rawText: string) => {
+        const trimmed = rawText.trim()
+        if (!trimmed) {
+            return
+        }
+
+        let nextPatch: Partial<IncidentFormData> = {}
+
+        try {
+            const parsed = JSON.parse(trimmed) as Partial<IncidentFormData>
+            const shortDescription = typeof parsed.short_description === 'string' ? parsed.short_description.trim() : ''
+            const description = typeof parsed.description === 'string' ? parsed.description.trim() : ''
+            const impact = parsed.impact === '1' || parsed.impact === '2' || parsed.impact === '3' ? parsed.impact : ''
+            const urgency = parsed.urgency === '1' || parsed.urgency === '2' || parsed.urgency === '3' ? parsed.urgency : ''
+
+            if (shortDescription) {
+                nextPatch.short_description = shortDescription
+            }
+            if (description) {
+                nextPatch.description = description
+            }
+            if (impact) {
+                nextPatch.impact = impact
+            }
+            if (urgency) {
+                nextPatch.urgency = urgency
+            }
+        } catch {
+            nextPatch = {}
+        }
+
+        if (!nextPatch.short_description) {
+            nextPatch.short_description = trimmed
+        }
+
+        setFormData((previous) => ({
+            ...previous,
+            ...nextPatch,
+        }))
+        setScanStatus('QR code scanned. Fields updated.')
+    }, [])
+
+    useEffect(() => {
+        let cancelled = false
+
+        const run = async () => {
+            if (!isScannerOpen) {
+                return
+            }
+            if (!window.isSecureContext) {
+                setScannerError('Camera access requires HTTPS or localhost.')
+                return
+            }
+            if (!navigator.mediaDevices?.getUserMedia) {
+                setScannerError('This browser does not support camera capture.')
+                return
+            }
+
+            try {
+                const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import('html5-qrcode')
+                if (cancelled) {
+                    return
+                }
+
+                const scanner = new Html5Qrcode('incident-form-qr-reader', {
+                    formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+                    verbose: false,
+                })
+                scannerRef.current = scanner
+                await scanner.start(
+                    { facingMode: 'environment' },
+                    {
+                        fps: 10,
+                        aspectRatio: 4 / 3,
+                        qrbox: {
+                            width: 240,
+                            height: 240,
+                        },
+                    },
+                    (decodedText) => {
+                        const rawText = decodedText.trim()
+                        if (!rawText || rawText === lastScannedValueRef.current) {
+                            return
+                        }
+                        lastScannedValueRef.current = rawText
+                        applyScannedText(rawText)
+                        setIsScannerOpen(false)
+                    },
+                    () => {
+                        // Ignore individual frame decoding misses.
+                    }
+                )
+
+                if (cancelled) {
+                    await stopScanner()
+                }
+            } catch (caughtError) {
+                console.error(caughtError)
+                setScannerError('Unable to start scanner. Check camera permissions and try again.')
+            }
+        }
+
+        void run()
+
+        return () => {
+            cancelled = true
+            void stopScanner()
+        }
+    }, [applyScannedText, isScannerOpen, stopScanner])
+
     const heading = isEditing
         ? `Edit ${typeof incident?.number === 'object' ? incident.number.display_value || 'Incident' : incident?.number || 'Incident'}`
         : 'Report New Incident'
@@ -77,7 +202,21 @@ export default function IncidentForm({ incident, onSubmit, onCancel }: IncidentF
                 </div>
                 <form onSubmit={handleSubmit}>
                     <div className="form-group">
-                        <label htmlFor="short_description">Short Description *</label>
+                        <div className="field-label-row">
+                            <label htmlFor="short_description">Short Description *</label>
+                            <button
+                                type="button"
+                                className="scan-button"
+                                onClick={() => {
+                                    lastScannedValueRef.current = ''
+                                    setScannerError('')
+                                    setScanStatus('')
+                                    setIsScannerOpen(true)
+                                }}
+                            >
+                                Scan QR
+                            </button>
+                        </div>
                         <input
                             type="text"
                             id="short_description"
@@ -87,6 +226,7 @@ export default function IncidentForm({ incident, onSubmit, onCancel }: IncidentF
                             required
                             maxLength={160}
                         />
+                        {scanStatus && <p className="scan-status">{scanStatus}</p>}
                     </div>
 
                     <div className="form-group">
@@ -131,6 +271,31 @@ export default function IncidentForm({ incident, onSubmit, onCancel }: IncidentF
                     </div>
                 </form>
             </div>
+            {isScannerOpen && (
+                <div className="scanner-overlay" role="dialog" aria-modal="true" aria-label="Scan QR code">
+                    <div className="scanner-panel">
+                        <div className="scanner-header">
+                            <h3>Scan QR Code</h3>
+                            <button type="button" className="close-button" onClick={() => setIsScannerOpen(false)}>
+                                x
+                            </button>
+                        </div>
+                        {scannerError ? (
+                            <p className="scanner-error">{scannerError}</p>
+                        ) : (
+                            <>
+                                <div id="incident-form-qr-reader" className="scanner-reader" />
+                                <p className="scanner-hint">Point your camera at a QR code to auto-fill the form.</p>
+                            </>
+                        )}
+                        <div className="scanner-actions">
+                            <button type="button" className="cancel-button" onClick={() => setIsScannerOpen(false)}>
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }

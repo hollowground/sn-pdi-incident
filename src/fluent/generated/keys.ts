@@ -49,6 +49,20 @@ declare global {
                         }
                     },
                     {
+                        table: 'sys_ux_lib_asset'
+                        id: '99a548f725d24ba19b11ebed40380d23'
+                        key: {
+                            name: 'x_961032_incident/index.js.map'
+                        }
+                    },
+                    {
+                        table: 'sys_ux_lib_asset'
+                        id: 'c805103b8d4e471da48d315570055f1c'
+                        key: {
+                            name: 'x_961032_incident/index'
+                        }
+                    },
+                    {
                         table: 'sn_glider_source_artifact_m2m'
                         id: 'd59379d73ae64c7bb28c0f99a14f6137'
                         key: {

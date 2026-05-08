@@ -72,6 +72,35 @@
     color: #333;
 }
 
+.field-label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.scan-button {
+    border: 1px solid #2d6cdf;
+    background: #eff5ff;
+    color: #1c4fb4;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 8px 14px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.scan-button:hover {
+    background: #deebff;
+}
+
+.scan-status {
+    margin: 8px 0 0;
+    color: #23623b;
+    font-size: 12px;
+}
+
 .form-container input,
 .form-container select,
 .form-container textarea {
@@ -122,4 +151,71 @@
 
 .submit-button:hover {
     background-color: #45a049;
+}
+
+.scanner-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1100;
+    background: rgba(0, 0, 0, 0.72);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+}
+
+.scanner-panel {
+    width: min(480px, 100%);
+    background: #ffffff;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 14px 30px rgba(0, 0, 0, 0.35);
+}
+
+.scanner-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid #ececec;
+}
+
+.scanner-header h3 {
+    margin: 0;
+    font-size: 16px;
+    color: #1d1d1d;
+}
+
+.scanner-reader {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    background: #101010;
+    display: grid;
+    place-items: center;
+}
+
+.scanner-reader > div {
+    border: 0 !important;
+}
+
+.scanner-hint {
+    margin: 0;
+    padding: 10px 16px;
+    font-size: 13px;
+    color: #4d4d4d;
+}
+
+.scanner-error {
+    margin: 0;
+    padding: 16px;
+    color: #8a1f2a;
+    background: #fdebee;
+    font-size: 14px;
+}
+
+.scanner-actions {
+    display: flex;
+    justify-content: flex-end;
+    padding: 12px 16px 16px;
+    border-top: 1px solid #f0f0f0;
 }
