@@ -76,6 +76,8 @@ export type Messages = {
     incidentSubmittedSuccessfully: (ticket: string) => string
     connectionLostNewIncidentQueued: string
     couldNotSubmitIncident: string
+    inactivityWarning: (seconds: number) => string
+    staySignedIn: string
     completionMotivationTemplates: Array<(name: string) => string>
     stateLabels: Record<string, string>
     actionLabels: Record<ActionId, string>
@@ -149,6 +151,8 @@ const EN_MESSAGES: Messages = {
     incidentSubmittedSuccessfully: (ticket) => `${ticket} was submitted successfully.`,
     connectionLostNewIncidentQueued: 'Connection lost. New incident report queued and will sync automatically.',
     couldNotSubmitIncident: 'Could not submit incident.',
+    inactivityWarning: (seconds) => `You have been inactive. You will be logged out in ${seconds}s unless you continue using the app.`,
+    staySignedIn: 'Stay Signed In',
     completionMotivationTemplates: [
         (name) => `Nice job resolving another case, ${name}!`,
         (name) => `Great work, ${name}. Another incident is complete.`,
@@ -266,6 +270,8 @@ const ES_MESSAGES: Messages = {
     incidentSubmittedSuccessfully: (ticket) => `${ticket} se envio correctamente.`,
     connectionLostNewIncidentQueued: 'Se perdio la conexion. El nuevo incidente se pondra en cola.',
     couldNotSubmitIncident: 'No se pudo enviar el incidente.',
+    inactivityWarning: (seconds) => `Inactividad detectada. Se cerrara tu sesion en ${seconds}s si no usas la app.`,
+    staySignedIn: 'Seguir conectado',
     completionMotivationTemplates: EN_MESSAGES.completionMotivationTemplates,
     stateLabels: {
         '1': 'Listo para Trabajar',
@@ -365,6 +371,8 @@ const FR_MESSAGES: Messages = {
     incidentSubmittedSuccessfully: (ticket) => `${ticket} a ete soumis avec succes.`,
     connectionLostNewIncidentQueued: 'Connexion perdue. Le nouvel incident est mis en file.',
     couldNotSubmitIncident: "Impossible d'envoyer l'incident.",
+    inactivityWarning: (seconds) => `Inactivite detectee. Deconnexion dans ${seconds}s si vous n'utilisez pas l'application.`,
+    staySignedIn: 'Rester connecte',
     completionMotivationTemplates: EN_MESSAGES.completionMotivationTemplates,
     stateLabels: {
         '1': 'Pret a Travailler',

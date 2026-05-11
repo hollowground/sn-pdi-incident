@@ -219,6 +219,30 @@ body {
     color: #5b21b6;
 }
 
+.inactivity-banner {
+    margin: 0.8rem 0;
+    border-radius: 0.8rem;
+    padding: 0.9rem;
+    font-weight: 600;
+    background: #ffedd5;
+    color: #9a3412;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.inactivity-stay-button {
+    border: 0;
+    border-radius: 0.6rem;
+    background: #9a3412;
+    color: #fff;
+    font-weight: 700;
+    padding: 0.55rem 0.8rem;
+    min-height: 40px;
+    white-space: nowrap;
+}
+
 .empty-state {
     background: #e5e7eb;
     color: var(--text-secondary);
@@ -531,6 +555,11 @@ body {
         left: 0.75rem;
         right: 0.75rem;
         min-width: 0;
+    }
+
+    .inactivity-banner {
+        flex-direction: column;
+        align-items: flex-start;
     }
 }
 

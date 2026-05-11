@@ -17,6 +17,8 @@ import {
 } from './services/IncidentService'
 
 const DEFAULT_ESTIMATE_MINUTES = 15
+const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000
+const INACTIVITY_WARNING_MS = 60 * 1000
 
 const FALLBACK_RESOLUTION_CODES: ChoiceOption[] = [
     { value: 'Duplicate', label: 'Duplicate' },
@@ -135,9 +137,15 @@ export default function App() {
     const [isOnline, setIsOnline] = useState(window.navigator.onLine)
     const [pendingSyncCount, setPendingSyncCount] = useState(0)
     const [hasLoadedFromServer, setHasLoadedFromServer] = useState(false)
+    const [inactivityRemainingSeconds, setInactivityRemainingSeconds] = useState<number | null>(null)
     const [reportedIncidentIds, setReportedIncidentIds] = useState<string[]>(() =>
         readJson<string[]>(STORAGE_KEYS.reportedIncidentIds, [])
     )
+    const inactivityDeadlineRef = useRef<number>(0)
+    const inactivityWarnTimerRef = useRef<number | null>(null)
+    const inactivityLogoutTimerRef = useRef<number | null>(null)
+    const inactivityCountdownRef = useRef<number | null>(null)
+    const inactivityResetRef = useRef<() => void>(() => undefined)
     const shouldAutoRefresh = !updatingId && !activeResolveId && !activeCommentId && !showReportForm
 
     const getPendingMutations = useCallback(() => readJson<PendingMutation[]>(STORAGE_KEYS.pendingMutations, []), [])
@@ -370,6 +378,78 @@ export default function App() {
         }, 1000)
 
         return () => window.clearInterval(timer)
+    }, [])
+
+    useEffect(() => {
+        const clearInactivityTimers = () => {
+            if (inactivityWarnTimerRef.current !== null) {
+                window.clearTimeout(inactivityWarnTimerRef.current)
+                inactivityWarnTimerRef.current = null
+            }
+            if (inactivityLogoutTimerRef.current !== null) {
+                window.clearTimeout(inactivityLogoutTimerRef.current)
+                inactivityLogoutTimerRef.current = null
+            }
+            if (inactivityCountdownRef.current !== null) {
+                window.clearInterval(inactivityCountdownRef.current)
+                inactivityCountdownRef.current = null
+            }
+        }
+
+        const startInactivityCountdown = () => {
+            const updateCountdown = () => {
+                const remainingMs = inactivityDeadlineRef.current - Date.now()
+                const remainingSeconds = Math.max(0, Math.ceil(remainingMs / 1000))
+                setInactivityRemainingSeconds(remainingSeconds)
+                if (remainingSeconds <= 0 && inactivityCountdownRef.current !== null) {
+                    window.clearInterval(inactivityCountdownRef.current)
+                    inactivityCountdownRef.current = null
+                }
+            }
+
+            updateCountdown()
+            inactivityCountdownRef.current = window.setInterval(updateCountdown, 1000)
+        }
+
+        const resetInactivityTimeout = () => {
+            clearInactivityTimers()
+            setInactivityRemainingSeconds(null)
+            inactivityDeadlineRef.current = Date.now() + INACTIVITY_TIMEOUT_MS
+
+            const warningDelayMs = Math.max(0, INACTIVITY_TIMEOUT_MS - INACTIVITY_WARNING_MS)
+            inactivityWarnTimerRef.current = window.setTimeout(() => {
+                startInactivityCountdown()
+            }, warningDelayMs)
+
+            inactivityLogoutTimerRef.current = window.setTimeout(() => {
+                logoutUser()
+            }, INACTIVITY_TIMEOUT_MS)
+        }
+        inactivityResetRef.current = resetInactivityTimeout
+
+        const activityEvents: Array<keyof WindowEventMap> = [
+            'pointerdown',
+            'keydown',
+            'touchstart',
+            'scroll',
+            'focus',
+        ]
+        const handleUserActivity = () => {
+            resetInactivityTimeout()
+        }
+
+        for (const eventName of activityEvents) {
+            window.addEventListener(eventName, handleUserActivity, { passive: true })
+        }
+        resetInactivityTimeout()
+
+        return () => {
+            for (const eventName of activityEvents) {
+                window.removeEventListener(eventName, handleUserActivity)
+            }
+            clearInactivityTimers()
+            inactivityResetRef.current = () => undefined
+        }
     }, [])
 
     const filteredIncidents = useMemo(() => {
@@ -734,6 +814,20 @@ export default function App() {
             {!isOnline && <div className="offline-banner">{messages.offlineModeBanner}</div>}
             {pendingSyncCount > 0 && (
                 <div className="pending-sync-banner">{messages.queuedChangesPending(pendingSyncCount)}</div>
+            )}
+            {inactivityRemainingSeconds !== null && (
+                <div className="inactivity-banner" role="alert">
+                    {messages.inactivityWarning(inactivityRemainingSeconds)}{' '}
+                    <button
+                        type="button"
+                        className="inactivity-stay-button"
+                        onClick={() => {
+                            inactivityResetRef.current()
+                        }}
+                    >
+                        {messages.staySignedIn}
+                    </button>
+                </div>
             )}
             {error && <div className="error-banner">{error}</div>}
             {success && <div className="success-banner">{success}</div>}
