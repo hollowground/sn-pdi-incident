@@ -777,9 +777,6 @@ export default function App() {
                 <div>
                     <p className="muted-label">{messages.myAssignedIncidents}</p>
                 </div>
-                <button className="refresh-button" onClick={() => void refreshIncidents()} disabled={loading}>
-                    {messages.refresh}
-                </button>
             </header>
 
             <section className="search-row">
