@@ -130,7 +130,7 @@ export default function App() {
     const [closeCodeOptions] = useState<ChoiceOption[]>(FALLBACK_RESOLUTION_CODES)
     const [showReportForm, setShowReportForm] = useState(false)
     const [profileLabel, setProfileLabel] = useState(MESSAGES_BY_LANGUAGE.en.profile)
-    const [completionFilter, setCompletionFilter] = useState<'all' | 'open' | 'completed'>('all')
+    const [completionFilter, setCompletionFilter] = useState<'all' | 'open' | 'completed'>('open')
     const [toastMessage, setToastMessage] = useState('')
     const seenIncidentIdsRef = useRef<Set<string> | null>(null)
     const syncInFlightRef = useRef(false)
